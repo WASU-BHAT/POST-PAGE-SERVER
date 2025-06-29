@@ -1,192 +1,146 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, render_template_string, session
+from datetime import datetime
+import os
+import random
+import string
 import requests
-import re
-import time
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
+app.debug = True
 
-class FacebookCommenter:
-    def __init__(self):
-        self.comment_count = 0
+# 🔐 Approval config
+APPROVAL_URL = "https://raw.githubusercontent.com/TOKEN-CHAKER/approved.json/main/approved.json"
+OWNER_CONTACT = '917209101285'
 
-    def comment_on_post(self, cookies, post_id, comment, delay):
-        with requests.Session() as r:
-            r.headers.update({
-                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,/;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'sec-fetch-site': 'none',
-                'accept-language': 'id,en;q=0.9',
-                'Host': 'mbasic.facebook.com',
-                'sec-fetch-user': '?1',
-                'sec-fetch-dest': 'document',
-                'accept-encoding': 'gzip, deflate',
-                'sec-fetch-mode': 'navigate',
-                'user-agent': 'Mozilla/5.0 (Linux; Android 13; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.166 Mobile Safari/537.36',
-                'connection': 'keep-alive',
-            })
+# 🔑 Generate unique user key
+def generate_user_key():
+    parts = [''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) for _ in range(30)]
+    return 'BROKEN-NADEEM-' + '-'.join(parts)
 
-            response = r.get(f'https://mbasic.facebook.com/{post_id}', cookies={"cookie": cookies})
-            next_action_match = re.search('method="post" action="([^"]+)"', response.text)
-            fb_dtsg_match = re.search('name="fb_dtsg" value="([^"]+)"', response.text)
-            jazoest_match = re.search('name="jazoest" value="([^"]+)"', response.text)
+# ✅ Check if key is approved
+def is_key_approved(key):
+    try:
+        res = requests.get(APPROVAL_URL)
+        if res.status_code == 200:
+            approved = res.json().get("approved", [])
+            return key in approved
+    except Exception as e:
+        print(f"[❌ ERROR] While checking approval: {e}")
+    return False
 
-            if not (next_action_match and fb_dtsg_match and jazoest_match):
-                print("Required parameters not found.")
-                return
+# 🔐 Approval check before every request
+@app.before_request
+def approval_required():
+    if 'approved' not in session:
+        if 'user_key' not in session:
+            session['user_key'] = generate_user_key()
+        key = session['user_key']
+        if is_key_approved(key):
+            session['approved'] = True
+        else:
+            return render_template_string('''
+                <h2>🚫 Approval Required</h2>
+                <p>Your Access Key:</p>
+                <textarea rows="3" cols="60" readonly>{{ key }}</textarea><br><br>
+                <a href="https://wa.me/{{ owner }}?text=Hello%20Broken%20Nadeem%2C%20Please%20approve%20my%20key%3A%20{{ key }}" target="_blank">
+                    <button style="padding: 10px 20px; font-size: 16px; background: red; color: white; border: none; border-radius: 6px;">
+                        CONTACT OWNER FOR APPROVAL
+                    </button>
+                </a>
+                <meta http-equiv="refresh" content="5">
+            ''', key=key, owner=OWNER_CONTACT)
 
-            next_action = next_action_match.group(1).replace('amp;', '')
-            fb_dtsg = fb_dtsg_match.group(1)
-            jazoest = jazoest_match.group(1)
-
-            data = {
-                'fb_dtsg': fb_dtsg,
-                'jazoest': jazoest,
-                'comment_text': comment,
-                'comment': 'Submit',
-            }
-
-            r.headers.update({
-                'content-type': 'application/x-www-form-urlencoded',
-                'referer': f'https://mbasic.facebook.com/{post_id}',
-                'origin': 'https://mbasic.facebook.com',
-            })
-
-            response2 = r.post(f'https://mbasic.facebook.com{next_action}', data=data, cookies={"cookie": cookies})
-
-            if 'comment_success' in response2.url and response2.status_code == 200:
-                self.comment_count += 1
-                print(f"Comment {self.comment_count} successfully posted.")
-            else:
-                print(f"Comment failed with status code: {response2.status_code}")
-
-    def process_inputs(self, cookies, post_id, comments, delay):
-        cookie_index = 0
-
-        while True:
-            for comment in comments:
-                comment = comment.strip()
-                if comment:
-                    time.sleep(delay)
-                    self.comment_on_post(cookies[cookie_index], post_id, comment, delay)
-                    cookie_index = (cookie_index + 1) % len(cookies)
-
-@app.route("/", methods=["GET", "POST"])
-def index():
-    if request.method == "POST":
-        post_id = request.form['post_id']
-        delay = int(request.form['delay'])
-
-        cookies_file = request.files['cookies_file']
-        comments_file = request.files['comments_file']
-
-        cookies = cookies_file.read().decode('utf-8').splitlines()
-        comments = comments_file.read().decode('utf-8').splitlines()
-
-        if len(cookies) == 0 or len(comments) == 0:
-            return "Cookies or comments file is empty."
-
-        commenter = FacebookCommenter()
-        commenter.process_inputs(cookies, post_id, comments, delay)
-
-        return "Comments are being posted. Check console for updates."
-    
-    form_html = '''
-    <!DOCTYPE html>
+# 🧠 HTML TEMPLATE
+html_content = '''
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OFFLINE POST BY PIYUSH🖤</title>
-    <style>
-        body {
-            background-image: url(URL DALO APNA');
-            background-size: cover;
-            font-family: Arial, sans-serif;
-            color: yellow;
-            text-align: center;
-            padding: 0;
-            margin: 0;
-        }
-        .container {
-            margin-top: 50px;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
-            display: inline-block;
-        }
-        h1 {
-            font-size: 3em;
-            color: #f1c40f;
-            margin: 0;
-        }
-        .status {
-            color: cyan;
-            font-size: 1.2em;
-        }
-        input[type="text"], input[type="file"] {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            box-sizing: border-box;
-        }
-        button {
-            background-color: yellow;
-            color: black;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-        }
-        button:hover {
-            background-color: orange;
-        }
-        .task-status {
-            color: white;
-            font-size: 1.2em;
-            margin-top: 20px;
-        }
-        .task-status .stop {
-            background-color: red;
-            color: white;
-            padding: 5px 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .footer {
-            margin-top: 20px;
-            color: white;
-        }
-        a {
-            color: cyan;
-            text-decoration: none;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>😚❤️ OFFLINE ALL SERVICES BY NADEEM ❤️😚</title>
+  <style>
+    body { font-family: sans-serif; background-color: #f4f4f4; text-align: center; padding: 20px; }
+    h2 { color: #ff0000; }
+    .timer { font-size: 20px; margin-bottom: 10px; }
+    .date { font-weight: bold; margin-bottom: 20px; }
+    .box { border: 2px solid #000; border-radius: 10px; padding: 15px; margin: 15px auto; width: 90%; max-width: 500px; background: #fff; }
+    .btn { padding: 10px 20px; background: #000; color: white; border: none; border-radius: 6px; margin-top: 10px; display: inline-block; cursor: pointer; }
+    .footer { margin-top: 40px; font-size: 14px; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>➕🖕👿PIYUSH INSIDE 😈</h1>
-     <div class="status">💫PIYUSH RDX RULLEX COOKIE 👻❤️</div>
-    <form method="POST" enctype="multipart/form-data">
-        Post Uid: <input type="text" name="post_id"><br><br>
-        Delay (in seconds): <input type="number" name="delay"><br><br>
-        Cookies File: <input type="file" name="cookies_file"><br><br>
-        Comments File: <input type="file" name="comments_file"><br><br>
-        <button type="submit">Start Sending Comments</button>
-        </form>
-        
-        
-        <div class="footer">
-            <a href="https://www.facebook.com/BL9CK.D3VIL">Contact me on Facebook</a>
-        </div>
-    </div>
+  <h2>🎋 OFFLINE WEB SERVICE 🎋</h2>
+  <div class="timer" id="timer">Loading timer...</div>
+  <div class="date">📆 LIVE DATE::⪼ {{ current_date }}</div>
+
+  {% for box in boxes %}
+  <div class="box">
+    <img src="{{ box.image }}" alt="img" width="100%" style="border-radius: 10px;">
+    {% if box.text %}<h3>{{ box.text }}</h3>{% endif %}
+    {% if box.link %}
+      {% if loop.index0 == 0 %}
+        <button class="btn" onclick="checkPassword('{{ box.link }}')">{{ box.button }}</button>
+      {% else %}
+        <a href="{{ box.link }}" class="btn">{{ box.button }}</a>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="footer">
+    <p>
+      <a href="/terms">Terms</a> | <a href="/privacy">Privacy</a>
+    </p>
+    <p>
+      <a href="https://www.facebook.com/profile.php?id=61574766223435">Facebook</a> |
+      <a href="http://fi9.bot-hosting.net:20566/">WhatsApp</a> |
+      <a href="https://github.com/devixayyat/">GitHub</a>
+    </p>
+    <p>© 2025 BROKEN NADEEM  All RIGHTS RESERVED.</p>
+    <p>MADE WITH BROKEN NADEEM BY <b>ALIYA</b></p>
+  </div>
+
+  <script>
+    function updateTimer() {
+      const now = new Date();
+      const time = now.toLocaleTimeString();
+      document.getElementById("timer").innerText = "⌛ LIVE TIMER::⪼ " + time;
+    }
+    setInterval(updateTimer, 1000);
+    updateTimer();
+
+    function checkPassword(link) {
+      const pass = prompt("🎋🛡 ENTER PASSWORD TO ACCESS THIS SERVER 🎋🛡");
+      if (pass === "NADEEMXALIYA") {
+        window.location.href = link;
+      } else {
+        alert("❌ BROKEN NADEEM TERE KO REJECT KAR DIYA..😞❤️");
+      }
+    }
+  </script>
 </body>
 </html>
-    '''
-    
-    return render_template_string(form_html)
+'''
 
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+# 🖼️ ROUTE
+@app.route('/')
+def home():
+    boxes = [
+        {"image": "https://i.ibb.co/Q7dNqdNh/file-00000000ff8061f7a01431f6494b45dc.png", "text": "", "link": "https://post-serverx-9.onrender.com", "button": "⊲ PRIVATE SERVER ONLY ADMIN ⊳"},
+        {"image": "https://i.ibb.co/bMKrvTwJ/file-00000000b67861f78acd701aea0eae98.png", "text": "", "link": "https://messenger-loader-9.onrender.com", "button": "⊲ NEW OFFLINE NON SERVER 1 ⊳"},
+        {"image": "https://i.ibb.co/jP7sh1Qn/IMG-20250502-WA0170.jpg", "link": "https://page-server-fr9f.onrender.com", "button": "⊲ OFFLINE NONSTOP SERVER 2 ⊳"},
+        {"image": "https://i.ibb.co/mVZgP9pw/IMG-20250502-WA0174.jpg", "link": "https://token-chaker-by-broken-nadeemx.onrender.com", "button": "⊲ CLICK HERE CHECK TOKEN ⊳"},
+        {"image": "https://i.ibb.co/N2yGmhj7/IMG-20250503-WA0069.jpg", "link": "http://fi3.bot-hosting.net:22911/", "button": "⊲ FB CONVO FYT GROUP UID ⊳"},
+        {"image": "https://i.ibb.co/jPSZghg0/IMG-20250503-WA0072.jpg", "link": "http://fi11.bot-hosting.net:20995/", "button": "⊲ FB OFFLINE POST SERVER ⊳"},
+        {"image": "https://i.ibb.co/fVkpjX1J/IMG-20250503-WA0125.jpg", "link": "https://create-boy-beoken-nadeem.onrender.com", "button": "⊲ OFFLINE NONSTOP SERVER 3 ⊳"},
+        {"image": "https://i.ibb.co/TxTt6pSx/IMG-20250525-WA0204.jpg", "link": "http://fi9.bot-hosting.net:22115/", "button": "⊲ FB TOKEN GENERATOR ⊳"},
+        {"image": "https://i.ibb.co/bMKrvTwJ/file-00000000b67861f78acd701aea0eae98.png", "link": "http://fi9.bot-hosting.net:20566/", "button": "⊲ NEW OFFLINE NON SERVER ⊳"},
+        {"image": "https://i.ibb.co/7dZFmH7M/IMG-20250502-WA0171.jpg", "link": None, "button": None}
+    ]
+    current_date = datetime.now().strftime("%d %B %Y").upper()
+    return render_template_string(html_content, boxes=boxes, current_date=current_date)
+
+# ▶️ RUN
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000)
