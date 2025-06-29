@@ -8,49 +8,6 @@ import requests
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 app.debug = True
-
-# 🔐 Approval config
-APPROVAL_URL = "https://raw.githubusercontent.com/TOKEN-CHAKER/approved.json/mhttps://raw.githubusercontent.com/TOKEN-CHAKER/approved.json/main/approved.jsonain/approved.json"
-OWNER_CONTACT = '919541427758'
-
-# 🔑 Generate unique user key
-def generate_user_key():
-    parts = [''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) for _ in range(30)]
-    return 'BHAT WASU-' + '-'.join(parts)
-
-# ✅ Check if key is approved
-def is_key_approved(key):
-    try:
-        res = requests.get(APPROVAL_URL)
-        if res.status_code == 200:
-            approved = res.json().get("approved", [])
-            return key in approved
-    except Exception as e:
-        print(f"[❌ ERROR] While checking approval: {e}")
-    return False
-
-# 🔐 Approval check before every request
-@app.before_request
-def approval_required():
-    if 'approved' not in session:
-        if 'user_key' not in session:
-            session['user_key'] = generate_user_key()
-        key = session['user_key']
-        if is_key_approved(key):
-            session['approved'] = True
-        else:
-            return render_template_string('''
-                <h2>🚫 Approval Required</h2>
-                <p>Your Access Key:</p>
-                <textarea rows="3" cols="60" readonly>{{ key }}</textarea><br><br>
-                <a href="https://wa.me/{{ owner }}?text=Hello%20Broken%20Nadeem%2C%20Please%20approve%20my%20key%3A%20{{ key }}" target="_blank">
-                    <button style="padding: 10px 20px; font-size: 16px; background: red; color: white; border: none; border-radius: 6px;">
-                        CONTACT OWNER FOR APPROVAL
-                    </button>
-                </a>
-                <meta http-equiv="refresh" content="5">
-            ''', key=key, owner=OWNER_CONTACT)
-
 # 🧠 HTML TEMPLATE
 html_content = '''
 <!DOCTYPE html>
