@@ -10,13 +10,13 @@ app.secret_key = os.urandom(24)
 app.debug = True
 
 # 🔐 Approval config
-APPROVAL_URL = "https://raw.githubusercontent.com/TOKEN-CHAKER/approved.json/main/approved.json"
-OWNER_CONTACT = '917209101285'
+APPROVAL_URL = "https://raw.githubusercontent.com/TOKEN-CHAKER/approved.json/mhttps://raw.githubusercontent.com/TOKEN-CHAKER/approved.json/main/approved.jsonain/approved.json"
+OWNER_CONTACT = '919541427758'
 
 # 🔑 Generate unique user key
 def generate_user_key():
     parts = [''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) for _ in range(30)]
-    return 'BROKEN-NADEEM-' + '-'.join(parts)
+    return 'BHAT WASU-' + '-'.join(parts)
 
 # ✅ Check if key is approved
 def is_key_approved(key):
